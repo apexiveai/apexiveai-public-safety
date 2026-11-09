@@ -1,0 +1,53 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: aps-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aps_db
+      POSTGRES_USER: aps_user
+      POSTGRES_PASSWORD: change_this_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - aps_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aps_user -d aps_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: aps-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    container_name: aps-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: change_this_keycloak_password
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infrastructure/keycloak/realm-apexiveai.json:/opt/keycloak/data/import/realm-apexiveai.json:ro
+
+  api:
+    build: ./backend
+    container_name: aps-api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  aps_pgdata:
